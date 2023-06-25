@@ -1,4 +1,4 @@
-interface IConverterConfig {
+interface IConfig {
 	"full-mode"?: boolean;
 	"syllable-precision"?: boolean;
 	wipe?: boolean;
@@ -99,5 +99,5 @@ interface IConverterConfig {
   
   type TSection = IScriptInfo | IStyles | IEvents;
   
-  export function convertToASS(time: string, options: IConverterConfig): string;
+  export function convertToASS(time: string, options: IConfig): string;
   

@@ -1,13 +1,12 @@
-import { StyleElement, SyllabesConfig } from './types';
-
+import type {  IConfig, IStyle } from './types';
 
 export default class KBPParser {
 
-	config: SyllabesConfig;
+	config: IConfig;
 	track: any;
-	styles: StyleElement[] = [];
+	styles: IStyle[] = [];
 
-	constructor(config: SyllabesConfig) {
+	constructor(config: IConfig) {
 		this.config = config;
 		this.track = [];
 	}
@@ -80,7 +79,7 @@ export default class KBPParser {
 			if (line.match(/Style[0-1][0-9]/g)?.length > 0) {
 				// first line of style
 				let element = line.split(',');
-				let style: StyleElement = {
+				let style: IStyle = {
 					Name: `${element[0]}_${element[1]}`,
 					PrimaryColour: `&H00${this.getSixDigitHexColor(colours[element[4]])}`,
 					SecondaryColour: `&H00${this.getSixDigitHexColor(colours[element[2]])}`,
@@ -91,7 +90,7 @@ export default class KBPParser {
 				// second line of style
 				element = lines[i].trim().split(',');
 				style.Fontname = element[0];
-				style.Fontsize = element[1];
+				style.Fontsize = parseInt(element[1]);
 				style.Bold = element[2] === 'B' ? -1 : 0;
 				style.Italic = element[2] === 'I' ? -1 : 0;
 				style.StrikeOut = element[2] === 'S' ? -1 : 0;
@@ -196,7 +195,7 @@ export default class KBPParser {
 		};
 
 		// Insert sentence syllables as objects or as a string
-		if (this.config.syllable_precision) {
+		if (this.config['syllable-precision']) {
 			sentence.syllables = syllables;
 		} else {
 			sentence.text = '';
