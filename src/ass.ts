@@ -3,7 +3,7 @@ import KBPParser from "./kbp";
 import stringify from "./assStringify";
 import type{
   IStyle,
-  IConverterConfig,
+  IConfig,
   ISentence,
   ISyllable,
   IDialogueKV,
@@ -12,7 +12,7 @@ import type{
 } from "./types";
 import * as ass from "./assTemplate";
 
-function generateASSLine(line: ISentence, options: IConverterConfig) {
+function generateASSLine(line: ISentence, options: IConfig) {
   const assLine = [];
   let startMs = line.start;
   const stopMs = line.end;
@@ -60,7 +60,7 @@ function generateASSLine(line: ISentence, options: IConverterConfig) {
   };
 }
 
-function getProgressive(syl: ISyllable, options: IConverterConfig) {
+function getProgressive(syl: ISyllable, options: IConfig) {
   // When duration exceeds the threshold, progressive wiping may be possible
   if (
     Math.floor(syl.duration / 10) >
@@ -92,7 +92,7 @@ function getStyleAss(style: IStyle): IStyleKV {
 }
 
 /** Convert KBP data (txt) to ASS */
-export function convertToASS(time: string, options: IConverterConfig) {
+export function convertToASS(time: string, options: IConfig) {
   const kbp = new KBPParser(options);
   const kara = kbp.parse(time);
   const dialogues: IDialogueKV<"Dialogue">[] = [];
