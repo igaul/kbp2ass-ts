@@ -1,222 +1,281 @@
-import type {  IConfig, IStyle } from './types';
+import { IStyle, IConfig, ISentence, ISyllable } from "./types";
 
+/** If a three-character hexcolor, make six-character */
+const toSixDigitHexColor=(hexcolor: string)=>hexcolor.length === 3 ? hexcolor.split('').reverse().map( hex => hex+hex ).join('') :hexcolor 
 export default class KBPParser {
+  config: IConfig;
+  track: ISentence[] | undefined;
+  styles: IStyle[] = [];
 
-	config: IConfig;
-	track: any;
-	styles: IStyle[] = [];
+  constructor(config: IConfig) {
+    this.config = config;
+    this.track = [];
+  }
 
-	constructor(config: IConfig) {
-		this.config = config;
-		this.track = [];
-	}
+  getAlignement(element: string) {
+    let alignment = 8;
+    if (element === "C") {
+      alignment = 8;
+    } else if (element === "L") {
+      alignment = 7;
+    } else if (element === "R") {
+      alignment = 9;
+    }
+    return alignment;
+  }
 
-	getSixDigitHexColor(hexcolor: string) {
-		// If a three-character hexcolor, make six-character
-		if (hexcolor.length === 3) {
-			hexcolor = hexcolor.split('').reverse().map(function (hex) {
-				return hex + hex;
-			}).join('');
-		}
-		return hexcolor;
-	}
+  /**
+   * Parse an KBP text file
+   * @param {string} file KBP text file content
+   */
+  parse(file: string) {
+    // Lyric match regex like ZA/						592/622/0
+    let regex = /(.*)\/ *([0-9]+)\/([0-9]+)\/([0-9]+)/g;
 
-	getAlignement(element: string) {
-		let alignment = 8;
-		if (element === 'C') {
-			alignment = 8;
-		} else if (element === 'L') {
-			alignment = 7;
-		} else if (element === 'R') {
-			alignment = 9;
-		}
-		return alignment;
-	}
+    if (file.match(regex).length === 0) {
+      throw "Invalid KaraokeBuilder file";
+    }
 
-	/**
-	 * Parse an KBP text file
-	 * @param {string} file KBP text file content
-	 */
-	parse(file: string) {
+    // Let's parse the file line by line
+    let lines = file.replace(/\r+/g, "").split("\n");
 
-		// Lyric match regex like ZA/            592/622/0
-		let regex = /(.*)\/ *([0-9]+)\/([0-9]+)\/([0-9]+)/g;
+    let sentenceID = 1; // Current sentence ID
+    let trackID = 1; // Current track ID
+    let currentStart = null; // Start of the current sentence (milliseconds)
+    let currentEnd = null; // End of the previous sentence (milliseconds)
+    let syllables = []; // Syllables list of the current sentence
+    let colors = null; // list of colours
+    let currentStyle: string = null; // Current style
 
-		if (file.match(regex).length === 0) {
-			throw ('Invalid KaraokeBuilder file');
-		}
+    // Below are defaults from KBS, they should get replaced by the Margins config line
+    let leftMargin = 2;
+    let rightMargin = 2;
+    let topMargin = 7 + (this.config.border ? 12 : 0); // margin from KBS plus CDG top border
+    let lineSpacing = 12 + 19; // the effective line spacing seems to add 19 pixels to the value set in KBS
 
-		// Let's parse the file line by line
-		let lines = file.replace(/\r+/g, '').split('\n');
+    const totalWidth = this.config.border ? 300 : 288;
 
-		let sentenceID = 1;			// Current sentence ID
-		let trackID = 1;			// Current track ID
-		let currentStart = null;	// Start of the current sentence (milliseconds)
-		let currentEnd = null;		// End of the previous sentence (milliseconds)
-		let syllables = [];			// Syllables list of the current sentence
-		let colours = null;			// list of colours
-		let currentStyle: string = null;	// Current style
+    // not set until a page starts
+    let currentPos = null;
+    let currentOffset = null;
+    let horizontalPos = null;
+    let currentAlignment = null;
+    let defaultWipeProgressive = null;
 
-		// We split blocks by PAGEV2, and ignore the first one (it is header)
-		let blockcount = 0;
+    // We split blocks by PAGEV2, and ignore the first one (it is header)
+    let blockcount = 0;
 
-		// Parse each line of the file until the end
-		for (let i = 0; i < lines.length; i++) {
-			// Delete the trailing spaces
-			let line: string = lines[i].trim();
+    // Parse each line of the file until the end
+    for (let i = 0; i < lines.length; i++) {
+      // Delete the trailing spaces
+      let line: string = lines[i].trimEnd();
 
-			if (line == 'PAGEV2' && blockcount === 0) {
-				blockcount++;
-				continue;
-			}
+      if (line == "PAGEV2") {
+        blockcount++;
+        currentPos = topMargin - lineSpacing; // line is read before the applicable syllables start, so it will add back lineSpacing
+        continue;
+      }
 
-			if (line.match(/Palette Colours/g)?.length > 0) {
-				i++;
-				colours = lines[i].trim().split(',');
-				continue;
-			}
+      if (line.match(/^'Margins/)?.length > 0) {
+        i++;
+        [leftMargin, rightMargin, topMargin, lineSpacing] = lines[i]
+          .trim()
+          .split(",")
+          .map(x => parseInt(x));
+        topMargin += this.config.border ? 12 : 0;
+        lineSpacing += 19;
+      }
 
-			if (line.match(/Style[0-1][0-9]/g)?.length > 0) {
-				// first line of style
-				let element = line.split(',');
-				let style: IStyle = {
-					Name: `${element[0]}_${element[1]}`,
-					PrimaryColour: `&H00${this.getSixDigitHexColor(colours[element[4]])}`,
-					SecondaryColour: `&H00${this.getSixDigitHexColor(colours[element[2]])}`,
-					OutlineColour: `&H00${this.getSixDigitHexColor(colours[element[3]])}`,
-					BackColour: `&H00${this.getSixDigitHexColor(colours[element[5]])}`
-				};
-				i++;
-				// second line of style
-				element = lines[i].trim().split(',');
-				style.Fontname = element[0];
-				style.Fontsize = parseInt(element[1]);
-				style.Bold = element[2] === 'B' ? -1 : 0;
-				style.Italic = element[2] === 'I' ? -1 : 0;
-				style.StrikeOut = element[2] === 'S' ? -1 : 0;
-				style.Underline = element[2] === 'U' ? -1 : 0;
-				style.Encoding = parseInt(element[3]);
-				i++;
-				// third line of style
-				element = lines[i].trim().split(',');
-				style.Outline = parseInt(element[0]);
-				style.Shadow = parseInt(element[4]);
-				this.styles.push(style);
-				continue;
-			}
+      if (line.match(/^'Other/)?.length > 0) {
+        i++;
+        defaultWipeProgressive =
+          lines[i].trim().split(",")[1] == "5" ? false : true;
+      }
 
-			// Ignore everything before the first block
-			if (blockcount == 0) {
-				continue;
-			}
+      if (line.match(/^'Palette Colours/)?.length > 0) {
+        i++;
+        colors = lines[i].trim().split(",");
+        continue;
+      }
 
-			if (line.match(/[LCR]\/[A-Za-z]/g)?.length > 0) {
-				let element = line.split('/');
-				if (element[2] !== '0' && element[3] !== '0') {
-					this.styles[element[1].toUpperCase().charCodeAt(0) - 65].Alignment = this.getAlignement(element[0]);
-					currentStyle = this.styles[element[1].toUpperCase().charCodeAt(0) - 65].Name;
-				}
-				continue;
-			}
+      if (line.match(/Style[0-1][0-9]/g)?.length > 0) {
+        // first line of style
+        let element = line.split(",");
+        let style: IStyle = {
+          Name: `${element[0]}_${element[1]}`,
+          PrimaryColour: `&H00${toSixDigitHexColor(colors[element[4]])}`,
+          SecondaryColour: `&H00${toSixDigitHexColor(colors[element[2]])}`,
+          OutlineColour: `&H00${toSixDigitHexColor(colors[element[3]])}`,
+          BackColour: `&H00${toSixDigitHexColor(colors[element[5]])}`,
+        };
+        i++;
+        // second line of style
+        element = lines[i].trim().split(",");
+        style.Fontname = element[0];
 
-			// Ignore block separators FX/F/ statements
-			if (line.startsWith('--------') || line.startsWith('FX/') || line == 'PAGEV2' || line == 'MODS') {
-				continue;
-			}
+        // Font size in .kbp refers to the cap height, whereas in .ass it
+        // refers to the line/body height. 1.5 seems to be correct or close
+        // for most normal fonts but ideally this should change to
+        // something like this example in Cairo:
+        // https://stackoverflow.com/questions/23252321/freetype-sizing-fonts-based-on-cap-height
+        style.Fontsize = parseInt(element[1]) * 1.5;
 
-			// Empty line is end of line
-			if (line.replace(/\s*/g, '').length == 0) {
-				if (syllables.length > 0) {
-					// Create a new sentence
-					let sentence = this.makeSentence(sentenceID, syllables, currentStart, currentEnd, currentStyle);
+        style.Bold = element[2] === "B" ? -1 : 0;
+        style.Italic = element[2] === "I" ? -1 : 0;
+        style.StrikeOut = element[2] === "S" ? -1 : 0;
+        style.Underline = element[2] === "U" ? -1 : 0;
+        style.Encoding = parseInt(element[3]);
+        i++;
+        // third line of style
+        element = lines[i].trim().split(",");
+        style.Outline = parseInt(element[0]);
+        style.Shadow = parseInt(element[4]);
+        this.styles.push(style);
+        continue;
+      }
 
-					currentStart = null;
-					currentEnd = null;
+      // Ignore everything before the first block
+      if (blockcount == 0) {
+        continue;
+      }
 
-					// Add the sentence to the current track
-					if (trackID == 1) {
-						this.track.push(sentence);
-					}
+      // TODO: fixed text (lowercase style)
+      // TODO: rotation
+      // TODO: transitions?
+      if (line.match(/[LCR]\/[A-Za-z]/g)?.length > 0) {
+        let element = line.split("/");
+        currentPos += lineSpacing;
+        currentOffset = parseInt(element[5]);
+        currentAlignment = this.getAlignement(element[0]);
+        horizontalPos =
+          ((currentAlignment - 7) * totalWidth) / 2 +
+          parseInt(element[4]) +
+          (8 - currentAlignment) *
+            ((currentAlignment == 7 ? leftMargin : rightMargin) +
+              (this.config.border ? 6 : 0));
+        if (element[2] !== "0" && element[3] !== "0") {
+          this.styles[element[1].toUpperCase().charCodeAt(0) - 65].Alignment =
+            currentAlignment;
+          currentStyle =
+            this.styles[element[1].toUpperCase().charCodeAt(0) - 65].Name;
+        }
+        currentStart = Math.floor(parseInt(element[2]) * 10);
+        currentEnd = Math.floor(parseInt(element[3]) * 10);
+        continue;
+      }
 
-					// Increment the sentence ID, reset the current sentence syllables
-					sentenceID++;
-					syllables = [];
-				}
-				continue;
-			}
+      // Ignore block separators FX/F/ statements
+      if (
+        line.startsWith("--------") ||
+        line.startsWith("FX/") ||
+        line == "PAGEV2" ||
+        line == "MODS"
+      ) {
+        continue;
+      }
 
-			// Syllable line
-			if (line.match(regex)?.length === 1) {
+      // Empty line is end of line
+      if (line.replace(/\s*/g, "").length == 0) {
+        if (syllables.length > 0) {
+          // Create a new sentence
+          let sentence = this.makeSentence(
+            sentenceID,
+            syllables,
+            currentStart,
+            currentEnd,
+            currentStyle,
+            currentPos + currentOffset,
+            horizontalPos,
+            currentAlignment
+          );
 
-				var syllable: any = {};
+          currentStart = null;
+          currentEnd = null;
 
-				// Split of the regex result
-				let matches = line.split('/');
+          // Add the sentence to the current track
+          if (trackID == 1) {
+            this.track.push(sentence);
+          }
 
-				// Get the syllable text
-				syllable.text = matches[0];
+          // Increment the sentence ID, reset the current sentence syllables
+          sentenceID++;
+          syllables = [];
+        }
+        continue;
+      }
 
-				// Add the start time of the syllable
-				syllable.start = Math.floor(parseInt(matches[1].trim()) * 10);
-				// Add the duration, end time
-				syllable.duration = Math.floor((parseInt(matches[2]) - parseInt(matches[1])) * 10);
-				syllable.end = Math.floor(parseInt(matches[2].trim()) * 10);
+      // Syllable line
+      if (line.match(regex)?.length === 1) {
+        var syllable: any = {};
 
-				if (syllables.length === 0) {
-					currentStart = syllable.start;
-				}
-				currentEnd = syllable.end;
+        // Split of the regex result
+        let matches = line.split("/");
 
-				if (syllable.start !== 0 || syllable.end !== 0) {
-					// Add the syllable
-					syllables.push(syllable);
-				}
-			}
-		}
+        // Get the syllable text
+        syllable.text = matches[0];
 
-		return {
-			track: this.track
-		};
-	}
+        // Add the start time of the syllable
+        syllable.start = Math.floor(parseInt(matches[1].trim()) * 10);
+        // Add the duration, end time
+        syllable.end = Math.floor(parseInt(matches[2].trim()) * 10);
+        syllable.duration = syllable.end - syllable.start;
 
-	/**
-	 * Make a new sentence
-	 * @param {number} id          ID of the sentence
-	 * @param {any[]}  syllables   Syllables list of the sentence
-	 * @param {number} start       Start time of the sentence
-	 * @param {number} end         End time of the sentence
-	 */
-	private makeSentence(id: number, syllables: any[], start: number, end: number, currentStyle: string) {
-		var sentence: any = {
-			id: id,
-			start: syllables[0].start,
-			end: syllables[syllables.length - 1].end,
-			currentStyle: currentStyle
-		};
+        let wipeType = parseInt(matches[3].trim());
+        if (wipeType == 0) {
+          syllable.wipeProgressive = defaultWipeProgressive;
+        } else {
+          syllable.wipeProgressive = wipeType == 5 ? false : true;
+        }
 
-		// Insert sentence syllables as objects or as a string
-		if (this.config['syllable-precision']) {
-			sentence.syllables = syllables;
-		} else {
-			sentence.text = '';
-			for (var j = 0; j < syllables.length; j++) {
-				sentence.text += syllables[j].text;
-			}
-		}
+        if (syllable.start !== 0 || syllable.end !== 0) {
+          // Add the syllable
+          syllables.push(syllable);
+        }
+      }
+    }
 
-		// Add the start of the sentence if it was present on the last "sentence end" line
-		if (start != null) {
-			sentence.start = start;
-		}
+    return {
+      track: this.track,
+    };
+  }
 
-		// Add the end of the sentence if any
-		if (end != null) {
-			sentence.end = end;
-		}
-
-		// Set the duration with start and end
-		sentence.duration = sentence.end - sentence.start;
-
-		return sentence;
-	}
+  /**
+   * Make a new sentence
+   * @param {number} id          ID of the sentence
+   * @param {any[]}  syllables   Syllables list of the sentence
+   * @param {number} start       Start time of the sentence
+   * @param {number} end         End time of the sentence
+   * @param {number} vpos        Vertical position to draw sentence
+   * @param {number} hpos        Horizontal position to draw sentence
+   * @param {number} alignment   Text alignment of sentence
+   */
+  private makeSentence(
+    id: number,
+    syllables: ISyllable[],
+    start: number,
+    end: number,
+    currentStyle: string,
+    vpos: number,
+    hpos: number,
+    alignment: number
+  ): ISentence {
+    start = start ?? syllables[0].start;
+    end = end ?? syllables[syllables.length - 1].end;
+    const duration = end - start;
+    return {
+      id,
+      start,
+      end,
+      duration,
+      currentStyle,
+      vpos,
+      hpos,
+      alignment,
+      // Insert sentence syllables as objects or as a string
+      syllables: this.config["syllable-precision"] ? syllables : undefined,
+      text: this.config["syllable-precision"]
+        ? ""
+        : syllables.map(s => s.text).join(""),
+    };
+  }
 }
