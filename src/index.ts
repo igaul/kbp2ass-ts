@@ -21,7 +21,7 @@ async function mainCLI() {
   if ('APPDATA' in process.env ) {
 	try {
 		const settings = readFileSync(process.env.APPDATA + '/Karaoke Builder/data_studio.ini', 'utf8');
-		track_offset = parseFloat(settings.match(/^setoffset\s+(\S+)/m)[1]) / 100;
+		track_offset = parseFloat(settings.match(/^setoffset\s+(\S+)/m)![1]) / 100;
 	} catch (error) {
 		
 	}
@@ -53,7 +53,7 @@ async function mainCLI() {
 		        Disable any boolean option with --no-[option]`)
 		// Used for compatibility with old syntax allowing minimum-progression-duration as a positional
 		// .positional only includes items before --, so this is how to tell if the second argument is before -- or not
-		.command('* [compat1] [compat2]', false, function(yargs) {
+		.command('* [compat1] [compat2]', false, function(yargs:any) {
 			yargs.positional('compat1', {
 				type: 'string'
 			})
@@ -138,7 +138,7 @@ async function mainCLI() {
       }
 		})
 		.strictOptions()
-		.check(function (argv) {
+		.check(function (argv:any) {
 			let f = argv['fade']?.split(',');
 			// Setting the type only makes it parse it as a number, it doesn't validate the result
 			if(isNaN(argv['minimum-progression-duration'])) {
@@ -146,14 +146,14 @@ async function mainCLI() {
 			}
 			else if (argv._.length > 2) {
 				throw new Error('Maximum of 2 files may be specified (infile and outfile)');
-			} else if (f.length < 1 || f.length > 2 || f.some(x=>isNaN(parseInt(x)) || parseInt(x) < 0)){
+			} else if (f.length < 1 || f.length > 2 || f.some((x:any)=>isNaN(parseInt(x)) || parseInt(x) < 0)){
 				throw new Error('--fade must have 1-2 non-negative integer fade durations specified');
 			} else {
 				return true;
 			}
 
 		})
-		.middleware(function (argv) {
+		.middleware(function (argv:any) {
 			if (argv['full-mode']) {
 				argv = {
 					wipe: true,

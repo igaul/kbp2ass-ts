@@ -75,7 +75,7 @@ interface IConfig {
   }
   interface ISentence {
 	id: number;
-	syllables: ISyllable[];
+	syllables?: ISyllable[];
 	start: number;
 	end: number;
 	currentStyle: string;

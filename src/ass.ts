@@ -13,13 +13,13 @@ import type{
 import * as ass from "./assTemplate";
 
 function generateASSLine(line: ISentence, options: IConfig) {
-  const assLine = [];
+  const assLine:string[] = [];
   let startMs = line.start;
   const stopMs = line.end;
-  let firstStart = null;
-  let lastSylEnd = null;
+  let firstStart:number|null = null;
+  let lastSylEnd:number|null= null;
   let gap = null;
-  line.syllables.forEach(syl => {
+  line.syllables?.forEach(syl => {
     gap =
       lastSylEnd != null && syl.start - lastSylEnd > 10
         ? `{\\k${(syl.start - lastSylEnd) / 10}}`
@@ -50,7 +50,7 @@ function generateASSLine(line: ISentence, options: IConfig) {
 
   // TODO: only use \anX when it differs from style? Currently line only stores style name, and style detail is not passed in.
   dialogue.value.Text = `{\\an${line.alignment}${pos}\\k${
-    (firstStart - startMs) / 10
+    (firstStart??startMs - startMs) / 10
   }${options.dialogueScript}}${assLine.join("")}`;
   dialogue.value.Effect = "fx";
 
@@ -64,7 +64,7 @@ function getProgressive(syl: ISyllable, options: IConfig) {
   // When duration exceeds the threshold, progressive wiping may be possible
   if (
     Math.floor(syl.duration / 10) >
-    Math.floor(options["minimum-progression-duration"] / 10)
+    Math.floor(options["minimum-progression-duration"]??0 / 10)
   ) {
     // If option is set to use wiping setting from the kbp file, do so, otherwise set unconditionally
     return options.wipe && !syl.wipeProgressive ? "" : "f";
@@ -118,9 +118,9 @@ export function convertToASS(time: string, options: IConfig) {
     },
   });
   for (const line of kara.track) {
-    const ASSLines = generateASSLine(line, options);
-    comments.push(clone(ASSLines.comment));
-    dialogues.push(clone(ASSLines.dialogue));
+    const assLines = generateASSLine(line, options);
+    comments.push(clone(assLines.comment));
+    dialogues.push(clone(assLines.dialogue));
   }
   comments.sort(sortStartTime);
   dialogues.sort(sortStartTime);

@@ -3,7 +3,7 @@ import { IStyle, IConfig, ISentence, ISyllable } from "./types";
 
 export default class KBPParser {
   config: IConfig;
-  track: ISentence[] | undefined;
+  track: ISentence[];
   styles: IStyle[] = [];
 
   constructor(config: IConfig) {
@@ -42,7 +42,7 @@ export default class KBPParser {
 		// Lyric match regex like ZA/						592/622/0
 		let regex = /(.*)\/ *([0-9]+)\/([0-9]+)\/([0-9]+)/g;
 
-		if (file.match(regex).length === 0) {
+		if (file.match(regex)?.length === 0) {
 			throw ('Invalid KaraokeBuilder file');
 		}
 
@@ -55,7 +55,7 @@ export default class KBPParser {
 		let currentEnd = null;		// End of the previous sentence (milliseconds)
 		let syllables = [];			// Syllables list of the current sentence
 		let colours = null;			// list of colours
-		let currentStyle: string = null;	// Current style
+		let currentStyle = null;	// Current style
 
 		// Below are defaults from KBS, they should get replaced by the Margins config line
 		let leftMargin = 2;
@@ -73,7 +73,7 @@ export default class KBPParser {
 		let defaultWipeProgressive = null;
 		let fixed = null;
 
-    let offsetms = Math.floor(this.config.offset * 1000);
+    let offsetms = Math.floor(this.config.offset??0 * 1000);
 
 		// We split blocks by PAGEV2, and ignore the first one (it is header)
 		let blockcount = 0;
@@ -89,7 +89,7 @@ export default class KBPParser {
 				continue;
 			}
 
-			if (line.match(/^'Margins/)?.length > 0) {
+			if (line.match(/^'Margins/)?.length??0 > 0) {
 				i++;
 				[leftMargin, rightMargin, topMargin, lineSpacing] = lines[i].trim().split(',').map(x => parseInt(x));
 				topMargin += (this.config.border ? 12 : 0);
@@ -98,29 +98,29 @@ export default class KBPParser {
 				lineSpacing += 19;
 			}
 
-			if (line.match(/^'Other/)?.length > 0) {
+			if (line.match(/^'Other/)?.length??0 > 0) {
 				i++;
 				defaultWipeProgressive = (lines[i].trim().split(',')[1] == '5' ? false : true);
 			}
 
-			if (line.match(/^'Palette Colours/)?.length > 0) {
+			if (line.match(/^'Palette Colours/)?.length??0 > 0) {
 				i++;
 				colours = lines[i].trim().split(',');
 				continue;
 			}
 
 			let matches = line.match(/Style([0-1][0-9])/)
-			if (matches?.length > 0) {
+			if (matches && matches.length > 0) {
 				// Style numbers can be skipped and possibly don't even need to be sequential
 				let index = parseInt(matches[1]);
 				// first line of style
 				let element = line.split(',');
 				let style: IStyle = {
 					Name: `${element[0]}_${element[1]}`,
-					PrimaryColour: this.kbp2AssColor(colours, parseInt(element[4])),
-					SecondaryColour: this.kbp2AssColor(colours, parseInt(element[2])),
-					OutlineColour: this.kbp2AssColor(colours, parseInt(element[3])),
-					BackColour: this.kbp2AssColor(colours, parseInt(element[5]))
+					PrimaryColour: this.kbp2AssColor(colours!, parseInt(element[4])),
+					SecondaryColour: this.kbp2AssColor(colours!, parseInt(element[2])),
+					OutlineColour: this.kbp2AssColor(colours!, parseInt(element[3])),
+					BackColour: this.kbp2AssColor(colours!, parseInt(element[5]))
 				};
 				i++;
 				// second line of style
@@ -157,9 +157,14 @@ export default class KBPParser {
 
 			// TODO: rotation
 			// TODO: transitions?
-			if (line.match(/[LCR]\/[A-Za-z]/g)?.length > 0) {
+			if (line.match(/[LCR]\/[A-Za-z]/g)?.length??0 > 0) {
 				let element = line.split('/');
-				currentPos += lineSpacing;
+				if(currentPos === null) {
+					currentPos = lineSpacing;
+				}else{
+						currentPos += lineSpacing;		
+				}
+	
 				currentOffset = parseInt(element[5]);
 				currentAlignment = this.getAlignement(element[0]);
 				horizontalPos = (currentAlignment - 7) * totalWidth / 2 + parseInt(element[4]) +
@@ -187,7 +192,7 @@ export default class KBPParser {
 			if (line.replace(/\s*/g, '').length == 0) {
 				if (syllables.length > 0) {
 					// Create a new sentence
-					let sentence = this.makeSentence(sentenceID, syllables, currentStart, currentEnd, currentStyle, currentPos + currentOffset, horizontalPos, currentAlignment);
+					let sentence = this.makeSentence(sentenceID, syllables, currentStart!, currentEnd!, currentStyle!, currentPos! + currentOffset!, horizontalPos!, currentAlignment!);
 
 					currentStart = null;
 					currentEnd = null;
