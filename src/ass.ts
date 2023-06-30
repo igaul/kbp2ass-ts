@@ -22,6 +22,7 @@ export const defaultConfig: IConfig = {
   "minimum-progression-duration": 100,
   fade: "300,200",
   offset: 0,
+  "syllable-precision": true,
 };
 
 function generateASSLine(line: ISentence, options: IConfig) {
